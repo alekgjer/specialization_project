@@ -7,3 +7,6 @@ results/*
 
 # Ignore .idea
 .idea/
+
+# Ignore config.py
+config.py
