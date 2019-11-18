@@ -1,6 +1,7 @@
 # Ignore results and plots
 plots/*
 results/*
+!results/diffProperties*
 
 # Ignore notebook checkpoints
 .ipynb_checkpoints
