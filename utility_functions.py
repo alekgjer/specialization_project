@@ -2,7 +2,6 @@ import numpy as np
 import os
 
 from scipy.linalg import norm
-import matplotlib.pyplot as plt
 
 from particle_box import ParticleBox
 from simulation import Simulation
@@ -70,6 +69,7 @@ def random_positions_for_given_radius(number_of_particles, radius, y_max=1.0, br
     :param number_of_particles: int giving the amount of particles to create positions for
     :param radius: radius of the particles
     :param y_max: max limit on the y-axis. Can be used to create wall on bottom half or particles everywhere.
+    :param brownian_particle: boolean value used to give if to create a bp in the middle with r=3r0
     :return: uniformly distributed positions as a 2D array with shape (number_of_particles, 2)
     """
     positions = np.zeros((number_of_particles, 2))  # output shape
@@ -121,7 +121,8 @@ def random_positions_for_given_radius(number_of_particles, radius, y_max=1.0, br
 
 def validate_positions(positions, radius):
     """
-        Function to validate the initial positions by checking if the particles are closer than 2r
+        Function to validate the initial positions by checking if the particles are closer than 2r. Not valid for
+        positions to a Brownian particle with bigger radius
     :param positions: positions of the particles as a (N, 2) array
     :param radius: radius of the particles
     """
@@ -215,7 +216,7 @@ def speed_distribution(use_equal_particles=True, number_of_runs=1):
         3 in the exam. The procedure is based on initializing a system of many particles with the same initial speed.
         Then you start the simulation and let them collide until equilibrium have been reached. One then return the
         speed of each particle in order to create speed distribution plots.
-    :param use_equal_particles: bool value that separates problem 2 and 3. If not equal: Second halv will have m=4*m0
+    :param use_equal_particles: bool value that separates problem 2 and 3. If not equal: Second half will have m=4*m0
     :param number_of_runs: In order to achieve better statistics, take averages over multiple runs.
     """
     N = 2000  # number of particles
@@ -300,11 +301,14 @@ def compute_avg_energy_development_after_time():
 
     # create simulation object
     t_stop = 1
+    dt = 0.01  # timestep
     simulation = Simulation(box_of_particles=None, stopping_criterion=t_stop)
-    matrix_to_file = np.zeros((int(t_stop/0.01)+1, 4))  # matrix used to save information. Size given by stop and output
 
     for xi in xi_list:
+        matrix_to_file = np.zeros(
+            (int(t_stop / dt) + 1, 4))  # matrix used to save information. Size given by stop and output
         for i in range(number_of_realizations):
+            print(f"Run number: {i+1}")
             # new velocity vectors for each realization, but same initial positions
             velocities = random_uniformly_distributed_velocities(N, v_0)
             # initialize a ParticleBox with given parameters
@@ -319,11 +323,10 @@ def compute_avg_energy_development_after_time():
             simulation.time_at_previous_collision = np.zeros(box_of_particles.N)
 
             time_array, energy_array_all, energy_array_m0, energy_array_m, mean_speed_array =\
-                simulation.simulate_statistics_until_given_time('energyDevNEqParticles', output_timestep=0.01,
+                simulation.simulate_statistics_until_given_time('energyDevNEqParticles', output_timestep=dt,
                                                                 equal_particles=False)
 
-            # store results in a matrix with given form: time, avg_energy, avg_energy_m0 and avg_energy_m
-            matrix_to_file = np.zeros((len(time_array), 4))
+            # add results in a matrix with given form: time, avg_energy, avg_energy_m0 and avg_energy_m
             matrix_to_file[:, 0] += time_array
             matrix_to_file[:, 1] += energy_array_all
             matrix_to_file[:, 2] += energy_array_m0
@@ -495,10 +498,10 @@ def create_fractal_from_sticky_particles():
         Function that creates fractal properties by allowing particles to stick together if a particle collides with
         a particle at rest. Initially the particle closest to the center is at rest and a fractal builds in time
     """
-    N = 2000  # number of particles
+    N = 5000  # number of particles
     v_0 = 0.2  # initial speed of all particles
     xi = 1
-    radius = 0.007  # radius of all particles
+    radius = 0.004  # radius of all particles
     positions = np.load(os.path.join(init_folder, f'uniform_pos_N_{N}_rad_{radius}.npy'))
     distance_to_center = norm(positions - np.tile([0.5, 0.5], reps=(len(positions), 1)), axis=1)
     closest_particle = np.argmin(distance_to_center)
@@ -519,7 +522,7 @@ def create_fractal_from_sticky_particles():
     simulation = Simulation(box_of_particles=box_of_particles, stopping_criterion=energy_stop)
 
     # simulate until all particles is at rest
-    simulation.simulate_until_given_energy('fractalCreation', output_timestep=0.1, sticky_particles=True)
+    simulation.simulate_until_given_energy('fractalCreation', output_timestep=1, sticky_particles=True)
     # save the system at rest with all particle positions to file
     np.save(file=os.path.join(results_folder, f'fractalPositions_N_{N}_rad_{radius}'),
             arr=simulation.box_of_particles.positions)
@@ -537,48 +540,53 @@ def compute_mean_free_path():
     initial_radius = 0.007  # radius of all particles
     positions = np.load(os.path.join(init_folder, f'uniform_pos_N_{N}_rad_{initial_radius}.npy'))
     velocities = random_uniformly_distributed_velocities(N, v_0)
-
     mass = np.ones(N)  # all particles have the same mass
 
     number_of_parameters = 10
     radius_parameter = np.linspace(0.1, 1, number_of_parameters)*initial_radius
 
-    t_stop = 7
+    number_of_runs = 10
+    t_stop = 5
     simulation = Simulation(box_of_particles=None, stopping_criterion=t_stop)
 
     matrix_to_file = np.zeros((number_of_parameters, 2))
 
-    for counter, radius in enumerate(radius_parameter):
-        radii = np.ones(N) * radius  # all particles have the same radius
+    for i in range(number_of_runs):
+        print(f"Run: {i}")
+        for counter, radius in enumerate(radius_parameter):
+            # velocities = random_uniformly_distributed_velocities(N, v_0)
+            np.random.shuffle(velocities)
 
-        # initialize a ParticleBox with given parameters
-        box_of_particles = ParticleBox(number_of_particles=N,
-                                       restitution_coefficient=xi,
-                                       initial_positions=positions,
-                                       initial_velocities=velocities,
-                                       masses=mass,
-                                       radii=radii)
+            radii = np.ones(N) * radius  # all particles have the same radius
 
-        # update simulation object with the given system
-        simulation.box_of_particles = box_of_particles
-        simulation.time_at_previous_collision = np.zeros(box_of_particles.N)
+            # initialize a ParticleBox with given parameters
+            box_of_particles = ParticleBox(number_of_particles=N,
+                                           restitution_coefficient=xi,
+                                           initial_positions=positions,
+                                           initial_velocities=velocities,
+                                           masses=mass,
+                                           radii=radii)
 
-        # simulate
-        simulation.simulate_until_given_time_mask_quantities('mfp', output_timestep=0.1, update_positions=True)
-        computed_mean_free_path =\
-            simulation.box_of_particles.distance_to_collisions / simulation.box_of_particles.collision_count_particles
-        mean_free_path_mask = np.mean(computed_mean_free_path[simulation.mask])
-        matrix_to_file[counter, 0] = radius
-        matrix_to_file[counter, 1] = mean_free_path_mask
+            # update simulation object with the given system
+            simulation.box_of_particles = box_of_particles
+            simulation.time_at_previous_collision = np.zeros(box_of_particles.N)
 
-        simulation.reset()
+            # simulate
+            simulation.simulate_until_given_time_mask_quantities('mfp', output_timestep=0.1, update_positions=True,
+                                                                 save_positions=False)
+            computed_mean_free_path =\
+                simulation.box_of_particles.distance_to_collisions / simulation.box_of_particles.collision_count_particles
+            mean_free_path_mask = np.mean(computed_mean_free_path[simulation.mask])
+            matrix_to_file[counter, 0] = radius
+            matrix_to_file[counter, 1] = mean_free_path_mask
 
-    # save results to file
-    np.save(file=os.path.join(results_folder, f'mean_free_path_N_{N}_func_radius'), arr=matrix_to_file)
+            simulation.reset()
+
+        # save results to file
+        np.save(file=os.path.join(results_folder, f'mean_free_path_N_{N}_func_radius_run_{i}_eq_start'), arr=matrix_to_file)
 
 
-def compute_diffusion_properties_from_mask_particles():
-    # TODO: something wrong with the diffusion properties..
+def compute_diffusion_properties_from_mask_particles(single_bp_particle=False, eq_start=False, bigger_radius=False):
     """
         Functionality to compute the distance of particles starting close to the center of the box as a function of time
         in order to study diffusion properties. Function will save the results to file.
@@ -587,36 +595,51 @@ def compute_diffusion_properties_from_mask_particles():
     v_0 = 0.2  # initial speed of all particles
     xi = 1
     radius = 0.007  # radius of all particles
-    # positions = np.load(os.path.join(init_folder, f'eq_pos_N_{N}_rad_{radius}.npy'))
-    # velocities = np.load(os.path.join(init_folder, f'eq_vel_N_{N}_rad_{radius}.npy'))
-    # positions = np.load(os.path.join(init_folder, f'uniform_pos_N_{N}_rad_{radius}.npy'))
-    positions = np.load(os.path.join(init_folder, f'uniform_pos_around_bp_N_{N}_rad_{radius}_bp_rad_{radius*3}.npy'))
+    if bigger_radius:
+        positions = np.load(
+            os.path.join(init_folder, f'uniform_pos_around_bp_N_{N}_rad_{radius}_bp_rad_{radius * 3}.npy'))
+    else:
+        positions = np.load(os.path.join(init_folder, f'uniform_pos_N_{N}_rad_{radius}.npy'))
+    if eq_start:
+        velocities = np.load(os.path.join(init_folder, f'eq_vel_N_{N}_rad_{radius}.npy'))
+    else:
+        velocities = random_uniformly_distributed_velocities(N, v_0)
+
     radii = np.ones(N) * radius  # all particles have the same radius
     mass = np.ones(N)  # all particles have the same mass
 
     distance_to_center = norm(positions - np.tile([0.5, 0.5], reps=(len(positions), 1)), axis=1)
     closest_particle = np.argmin(distance_to_center)
+    if single_bp_particle:
+        if not bigger_radius:
+            mass[closest_particle] *= 10
+        else:
+            radii[closest_particle] *= 3
 
-    # mass[closest_particle] *= 3
-    # radii[closest_particle] /= 3
-    radii[0] *= 3
-    # mass[0] *= 3
+    validate_positions(positions, radius)
 
-    # validate_positions(positions, radius)
-
-    number_of_runs = 1
+    number_of_runs = 10
     t_stop = 5
     timestep = 0.02
     simulation = Simulation(box_of_particles=None, stopping_criterion=t_stop)
-    simulation.mask = distance_to_center == distance_to_center[closest_particle]
+
+    if single_bp_particle:
+        simulation.mask = distance_to_center == distance_to_center[closest_particle]
 
     matrix_to_file = np.zeros((int(t_stop/timestep)+1, 3))
+    if single_bp_particle:
+        matrix_to_file = np.zeros((int(t_stop / timestep) + 1, 5))
 
     for i in range(number_of_runs):
         print(f'Run number: {i+1}')
-        velocities = random_uniformly_distributed_velocities(N, v_0)
-        # velocities[closest_particle] /= np.sqrt(3)
-        # velocities[0, :] /= np.sqrt(3)
+        if eq_start:
+            np.random.shuffle(velocities)
+        else:
+            velocities = random_uniformly_distributed_velocities(N, v_0)
+        if single_bp_particle:
+            if not bigger_radius:
+                velocities[closest_particle] *= 1
+
         # initialize a ParticleBox with given parameters
         box_of_particles = ParticleBox(number_of_particles=N,
                                        restitution_coefficient=xi,
@@ -628,21 +651,35 @@ def compute_diffusion_properties_from_mask_particles():
         # update simulation object with the given system
         simulation.box_of_particles = box_of_particles
         simulation.time_at_previous_collision = np.zeros(box_of_particles.N)
+        if single_bp_particle:
+            time_array, bp_position_array, bp_velocity_array = \
+                simulation.simulate_until_given_time_bp('brownianParticle', output_timestep=timestep,
+                                                        save_positions=True)
+            matrix_to_file[:, 0] = time_array
+            matrix_to_file[:, 1] = bp_position_array[:, 0]
+            matrix_to_file[:, 2] = bp_position_array[:, 1]
+            matrix_to_file[:, 3] = bp_velocity_array[:, 0]
+            matrix_to_file[:, 4] = bp_velocity_array[:, 1]
+            if bigger_radius:
+                np.save(file=os.path.join(results_folder, f'diffProperties_3r0m0_particle_tmax_{t_stop}_run_{i+200}'),
+                        arr=matrix_to_file)
+            else:
+                np.save(file=os.path.join(results_folder, f'diffProperties_r010m0_particle_tmax_{t_stop}_run_{i}_eq_speed'),
+                        arr=matrix_to_file)
+        else:
+            time_array, mean_quadratic_distance_array, mean_quadratic_speed_array = \
+                simulation.simulate_until_given_time_mask_quantities('diffusionProperties', output_timestep=timestep,
+                                                                     save_positions=True)
 
-        time_array, mean_quadratic_distance_array, mean_quadratic_speed_array = \
-            simulation.simulate_until_given_time_mask_quantities('diffusionProperties', output_timestep=timestep)
-
-        matrix_to_file[:, 0] += time_array
-        matrix_to_file[:, 1] += mean_quadratic_distance_array
-        matrix_to_file[:, 2] += mean_quadratic_speed_array
+            matrix_to_file[:, 0] = time_array
+            matrix_to_file[:, 1] = mean_quadratic_distance_array
+            matrix_to_file[:, 2] = mean_quadratic_speed_array
+            if eq_start:
+                np.save(file=os.path.join(results_folder,
+                                          f'diffProperties_r0m0_particle_tmax_{t_stop}_run_{i}_eq_start'),
+                        arr=matrix_to_file)
+            else:
+                np.save(file=os.path.join(results_folder, f'diffProperties_r0m0_particle_tmax_{t_stop}_run_{i+30}'),
+                        arr=matrix_to_file)
 
         simulation.reset()
-
-    matrix_to_file /= number_of_runs
-    # plt.figure()
-    # plt.plot(matrix_to_file[:, 0], matrix_to_file[:, 1])
-    # plt.figure()
-    # plt.plot(matrix_to_file[:, 0], matrix_to_file[:, 2])
-    # plt.show()
-    # np.save(file=os.path.join(results_folder, f'diffProperties_3r0m0_particle_tmax_{t_stop}_runs_{number_of_runs}'),
-    #         arr=matrix_to_file)

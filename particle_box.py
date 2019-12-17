@@ -11,7 +11,8 @@ class ParticleBox:
         function is simulate which is a implementation of a event driven simulation of particles colliding in a box.
     """
 
-    def __init__(self, number_of_particles, restitution_coefficient, initial_positions, initial_velocities, masses, radii):
+    def __init__(self, number_of_particles, restitution_coefficient, initial_positions, initial_velocities, masses,
+                 radii):
         """
             Initialize the ParticleBox class
         :param number_of_particles: number of particles in the box
@@ -167,6 +168,8 @@ class ParticleBox:
             tuples and push valid tuples into the heap queue.
         :param particle_number: the index of a particle in order to retrieve and/or update the particle data
         :param simulation_time: is a float of the simulation time, used to get time for collisions in the simulation
+        :param t_max: is a float containing the stopping criterion of the simulation in time. Is used to neglect
+        collisions if they occur later than t_max*1.01. Default to None: use all. Exist if simulation until t_stop.
         """
         time_at_collisions = self.time_at_collision_particles(particle_number, simulation_time)  # get time collisions
         collision_particles = np.arange(self.N)  # create a list of possible collision candidates
@@ -195,6 +198,8 @@ class ParticleBox:
         """
             Help function that initialize the heap queue by iterating though all particles and push all possible
             collisions to the heap queue.
+        :param t_max: is a float containing the stopping criterion of the simulation in time. Is used to neglect
+        collisions if they occur later than t_max*1.01. Default to None: use all. Exist if simulation until t_stop.
         """
         for particle_number in range(self.N):  # iterate through each particle
             self.add_collision_horizontal_wall_to_queue(particle_number, 0)  # add collision with horizontal wall
@@ -223,6 +228,8 @@ class ParticleBox:
             Help function that add all new possible collisions for a particle after being part of a collision
         :param particle_number: the index of a particle in order to retrieve and/or update the particle data
         :param simulation_time: is a float of the simulation time, used to get time for collisions in the simulation
+        :param t_max: is a float containing the stopping criterion of the simulation in time. Is used to neglect
+        collisions if they occur later than t_max*1.01. Default to None: use all. Exist if simulation until t_stop.
         """
         self.add_collision_horizontal_wall_to_queue(particle_number, simulation_time)
         self.add_collision_vertical_wall_to_queue(particle_number, simulation_time)
@@ -232,7 +239,8 @@ class ParticleBox:
         """
             Function to compute the energy in the system of particles. Based on boolean input can compute average
             kinetic energy of all particles or compute average for all, for m0 and for m.
-        :param equal_particles: bool value indicating if there exist similar type of particles. Separates problems
+        :param equal_particles: bool value indicating if there exist similar type of particles. If false: the different
+        halves of particles contain two different particle masses, m0 and m.
         :return: average energy of all particles or average energy of all particles, m0 particles and m particles
         """
         energy = 0.5 * self.masses * np.sum(self.velocities * self.velocities, axis=1)
